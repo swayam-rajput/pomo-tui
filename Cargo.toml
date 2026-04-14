@@ -1,0 +1,14 @@
+[package]
+name = "pomodoro-tui"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# ratatui: the main TUI framework. Handles all rendering, layout, widgets.
+ratatui = "0.29"
+
+# crossterm: the terminal backend. Handles raw mode, events, ANSI codes.
+crossterm = "0.28"
+
+# Used for cleaner error handling without boilerplate
+anyhow = "1"
