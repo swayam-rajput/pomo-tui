@@ -1,11 +1,7 @@
-// We need Duration (a length of time, e.g. 25 mins) and Instant (a point in time, like a stopwatch).
 use std::time::{Duration, Instant};
 
 // ─── WHAT IS AN ENUM? ────────────────────────────────────────────────────────
-// An `enum` lets you define a type that can only be one of a fixed set of values.
-// Here, our timer can only ever be in ONE of these three states. This is better
-// than using magic strings like "work" or "break" because the compiler will
-// warn you if you forget to handle a case.
+// An enum is a type that can only be ONE of a fixed set of values.
 #[derive(Clone, Copy, PartialEq)]
 pub enum Mode {
     Work,
@@ -13,20 +9,7 @@ pub enum Mode {
     LongBreak,
 }
 
-// We attach methods to our enum using `impl`.
 impl Mode {
-    // This returns how long (in seconds) each mode should last.
-    pub fn duration_secs(&self) -> u64 {
-        // `match` is like a switch statement, but exhaustive —
-        // Rust forces you to handle EVERY possible value.
-        match self {
-            Mode::Work => 25 * 60,
-            Mode::ShortBreak => 5 * 60,
-            Mode::LongBreak => 15 * 60,
-        }
-    }
-
-    // Returns a display label for the current mode.
     pub fn label(&self) -> &str {
         match self {
             Mode::Work => "we are working 🎯",
@@ -36,113 +19,188 @@ impl Mode {
     }
 }
 
-// ─── WHAT IS A STRUCT? ───────────────────────────────────────────────────────
-// A `struct` is a container that groups related data together.
-// Think of it like a class in other languages, but without inheritance.
-// Our `App` holds ALL the state for the Pomodoro timer.
-pub struct App {
-    pub mode: Mode,               // Are we working or on a break?
-    pub time_remaining: Duration, // How much time is left in this session?
-    pub is_running: bool,         // Is the timer counting down right now?
-    pub should_quit: bool,        // Did the user press 'q'?
-    pub sessions_done: u32,       // How many focus sessions are complete?
-    // This tracks "when did the last tick happen?" so we can subtract accurately.
-    last_tick: Instant,
+// The app can show either the timer or the settings screen.
+#[derive(Clone, Copy, PartialEq)]
+pub enum Screen {
+    Timer,
+    Settings,
 }
 
-// ─── impl App ────────────────────────────────────────────────────────────────
-// We put all the *behavior* of App here.
+// ─── APP STATE ───────────────────────────────────────────────────────────────
+pub struct App {
+    pub mode: Mode,
+    pub screen: Screen,
+    pub is_running: bool,
+    pub should_quit: bool,
+    pub sessions_done: u32,
+
+    // ── Custom durations (user-editable) ────────────────────────────────
+    pub work_secs: u64,
+    pub short_break_secs: u64,
+    pub long_break_secs: u64,
+
+    // Settings screen: which row is highlighted (0=Work, 1=Short, 2=Long)
+    pub settings_idx: usize,
+
+    // ── Accurate timing ─────────────────────────────────────────────────
+    // Instead of subtracting every 100ms (which drifts), we store:
+    //   • When we last pressed Play          → session_start
+    //   • How much time had elapsed before   → elapsed_before_pause
+    //
+    // time_remaining = total - (elapsed_before_pause + how_long_running_since_start)
+    //
+    // This means the progress bar is ALWAYS computed fresh from real clock
+    // values, so it moves smoothly every render frame.
+    session_start: Option<Instant>,
+    elapsed_before_pause: Duration,
+}
+
 impl App {
-    // `new()` is a constructor — a convention in Rust (not enforced, just idiomatic).
-    // It returns `Self`, which means "an instance of this type (App)".
     pub fn new() -> Self {
-        let mode = Mode::Work;
         Self {
-            mode,
-            time_remaining: Duration::from_secs(mode.duration_secs()),
+            mode: Mode::Work,
+            screen: Screen::Timer,
             is_running: false,
             should_quit: false,
             sessions_done: 0,
-            last_tick: Instant::now(),
+
+            work_secs: 25 * 60,
+            short_break_secs: 5 * 60,
+            long_break_secs: 15 * 60,
+
+            settings_idx: 0,
+
+            session_start: None,
+            elapsed_before_pause: Duration::ZERO,
         }
     }
 
-    // ─── TICK ──────────────────────────────────────────────────────────────
-    // This is called ~10 times per second from our main loop.
-    // `&mut self` means we can READ and MODIFY the App's data.
-    pub fn tick(&mut self) {
-        if !self.is_running {
-            // Store the tick time even when paused, so we don't
-            // accumulate a huge elapsed jump when we resume.
-            self.last_tick = Instant::now();
-            return;
+    // ─── TIMING HELPERS ──────────────────────────────────────────────────
+
+    // How many seconds is the current mode supposed to last?
+    pub fn total_secs(&self) -> u64 {
+        match self.mode {
+            Mode::Work => self.work_secs,
+            Mode::ShortBreak => self.short_break_secs,
+            Mode::LongBreak => self.long_break_secs,
         }
+    }
 
-        // How much time passed since the last tick?
-        let elapsed = self.last_tick.elapsed();
-        self.last_tick = Instant::now();
+    // Total elapsed time = what we saved before pausing + how long we've been running since.
+    fn total_elapsed(&self) -> Duration {
+        let running = self
+            .session_start
+            .map(|s| s.elapsed())
+            .unwrap_or(Duration::ZERO);
+        self.elapsed_before_pause + running
+    }
 
-        // checked_sub returns None if the result would go below zero.
-        // This prevents the timer from wrapping around to a huge number.
-        if let Some(new_remaining) = self.time_remaining.checked_sub(elapsed) {
-            self.time_remaining = new_remaining;
-        } else {
-            // Timer finished!
-            self.time_remaining = Duration::ZERO;
+    // Time remaining, always computed fresh — never drifts.
+    pub fn time_remaining(&self) -> Duration {
+        let total = Duration::from_secs(self.total_secs());
+        total.checked_sub(self.total_elapsed()).unwrap_or(Duration::ZERO)
+    }
+
+    // Progress as a value from 0.0 (just started) to 1.0 (done).
+    // This is what makes the bar move smoothly between render frames.
+    pub fn progress(&self) -> f64 {
+        let total = self.total_secs() as f64;
+        if total == 0.0 {
+            return 0.0;
+        }
+        (self.total_elapsed().as_secs_f64() / total).clamp(0.0, 1.0)
+    }
+
+    // Format "MM:SS" for display.
+    pub fn time_str(&self) -> String {
+        let secs = self.time_remaining().as_secs();
+        format!("{:02}:{:02}", secs / 60, secs % 60)
+    }
+
+    // ─── TICK ────────────────────────────────────────────────────────────
+    // Called every 50ms from the main loop.
+    // We only need to check if the session just finished — the countdown
+    // is computed live by `time_remaining()`, so no arithmetic needed here.
+    pub fn tick(&mut self) {
+        if self.is_running && self.time_remaining() == Duration::ZERO {
             self.is_running = false;
+            self.session_start = None;
             self.advance_mode();
         }
     }
 
-    // ─── ADVANCE MODE ──────────────────────────────────────────────────────
-    // Called automatically when a session ends. Moves to the next mode.
+    // ─── CONTROLS ────────────────────────────────────────────────────────
+    pub fn toggle(&mut self) {
+        if self.is_running {
+            // Pause: save how much time has elapsed so far.
+            if let Some(start) = self.session_start.take() {
+                self.elapsed_before_pause += start.elapsed();
+            }
+            self.is_running = false;
+        } else {
+            // Play: record when we started this running session.
+            self.session_start = Some(Instant::now());
+            self.is_running = true;
+        }
+    }
+
+    pub fn reset(&mut self) {
+        self.is_running = false;
+        self.session_start = None;
+        self.elapsed_before_pause = Duration::ZERO;
+    }
+
+    pub fn skip(&mut self) {
+        self.reset();
+        self.advance_mode();
+    }
+
+    // ─── SETTINGS SCREEN CONTROLS ─────────────────────────────────────────
+
+    // Move the cursor up/down in the settings list.
+    pub fn settings_up(&mut self) {
+        if self.settings_idx > 0 {
+            self.settings_idx -= 1;
+        }
+    }
+
+    pub fn settings_down(&mut self) {
+        if self.settings_idx < 2 {
+            self.settings_idx += 1;
+        }
+    }
+
+    // Adjust the currently selected setting by `delta` minutes.
+    // We allow 1–99 minutes for any session.
+    pub fn adjust_selected(&mut self, delta: i64) {
+        let target = match self.settings_idx {
+            0 => &mut self.work_secs,
+            1 => &mut self.short_break_secs,
+            _ => &mut self.long_break_secs,
+        };
+        let minutes = (*target as i64 / 60 + delta).clamp(1, 99);
+        *target = minutes as u64 * 60;
+
+        // If we changed the active mode's duration, reset the timer so it
+        // doesn't confusingly show a time beyond the new total.
+        self.reset();
+    }
+
+    // ─── INTERNAL ────────────────────────────────────────────────────────
     fn advance_mode(&mut self) {
         match self.mode {
             Mode::Work => {
                 self.sessions_done += 1;
-                // Every 4 work sessions → long break. Otherwise → short break.
-                if self.sessions_done % 4 == 0 {
-                    self.mode = Mode::LongBreak;
+                self.mode = if self.sessions_done % 4 == 0 {
+                    Mode::LongBreak
                 } else {
-                    self.mode = Mode::ShortBreak;
-                }
+                    Mode::ShortBreak
+                };
             }
             Mode::ShortBreak | Mode::LongBreak => {
                 self.mode = Mode::Work;
             }
         }
-        self.time_remaining = Duration::from_secs(self.mode.duration_secs());
-    }
-
-    // ─── CONTROLS ──────────────────────────────────────────────────────────
-    pub fn toggle(&mut self) {
-        self.is_running = !self.is_running;
-    }
-
-    pub fn reset(&mut self) {
-        self.time_remaining = Duration::from_secs(self.mode.duration_secs());
-        self.is_running = false;
-        self.last_tick = Instant::now();
-    }
-
-    pub fn skip(&mut self) {
-        self.advance_mode();
-        self.is_running = false;
-    }
-
-    // ─── HELPERS ───────────────────────────────────────────────────────────
-    // Returns a value from 0.0 (just started) to 1.0 (finished).
-    // The UI uses this to draw the progress bar.
-    pub fn progress(&self) -> f64 {
-        let total = self.mode.duration_secs() as f64;
-        let remaining = self.time_remaining.as_secs_f64();
-        // Clamp to [0.0, 1.0] to be safe.
-        ((total - remaining) / total).clamp(0.0, 1.0)
-    }
-
-    // Formats the remaining time as "MM:SS" (e.g. "24:07").
-    pub fn time_str(&self) -> String {
-        let secs = self.time_remaining.as_secs();
-        format!("{:02}:{:02}", secs / 60, secs % 60)
+        self.elapsed_before_pause = Duration::ZERO;
     }
 }

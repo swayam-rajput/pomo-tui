@@ -1,105 +1,178 @@
-// ratatui gives us everything we need to build the TUI layout and widgets.
 use ratatui::{
-    layout::{Alignment, Constraint, Direction, Layout},
+    layout::{Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Gauge, Paragraph},
     Frame,
 };
 
-// We import `App` from our sibling module `app.rs`.
-// `crate::` means "start from the root of this project".
-use crate::app::{App, Mode};
+use crate::app::{App, Mode, Screen};
 
-// ─── RENDER ──────────────────────────────────────────────────────────────────
-// This is the only public function in ui.rs.
-// `frame` is a mutable reference to the drawing surface.
-// `app` is a shared (read-only) reference to our state.
-// We intentionally only READ from `app` here — the UI should never change state.
+ // ─── RENDER ENTRY POINT ──────────────────────────────────────────────────────
+// ratatui calls this every ~50ms with a fresh Frame to draw into.
+// We decide which screen to show based on `app.screen`.
 pub fn render(frame: &mut Frame, app: &App) {
-    // ── 1. SPLIT THE SCREEN INTO ROWS ────────────────────────────────────
-    // `Layout` divides the terminal area into chunks, like CSS Flexbox.
-    // Direction::Vertical means we're stacking rows top-to-bottom.
+    match app.screen {
+        Screen::Timer => render_timer(frame, app),
+        Screen::Settings => render_settings(frame, app),
+    }
+}
+
+// ─── TIMER SCREEN ────────────────────────────────────────────────────────────
+fn render_timer(frame: &mut Frame, app: &App) {
+    // Split the terminal into 5 rows.
+    // Think of this like CSS Flexbox — each row gets a fixed or flexible size.
     let rows = Layout::default()
         .direction(Direction::Vertical)
+        .margin(1)
         .constraints([
-            Constraint::Length(2), // Mode label  ("we are working 🎯")
-            Constraint::Length(1), // Time string  ("24:07")
-            Constraint::Length(2), // Progress bar
-            Constraint::Min(0),    // Empty space (fills whatever is left)
-            Constraint::Length(1), // Help bar at the bottom
+            Constraint::Length(1), // "we are working 🎯"
+            Constraint::Length(1), // blank spacer
+            Constraint::Length(1), // "24:07  (sessions: 3)"
+            Constraint::Length(1), // blank spacer
+            Constraint::Length(3), // [progress bar]
+            Constraint::Min(0),    // fills remaining space
+            Constraint::Length(1), // help bar
         ])
         .split(frame.area());
 
-    // ── 2. MODE LABEL ────────────────────────────────────────────────────
-    // `Paragraph` is a text widget. We style it with the mode's color.
-    let label_color = mode_color(&app.mode);
+    let color = mode_color(&app.mode);
 
-    let mode_label = Paragraph::new(app.mode.label())
-        .style(
+    // ── Row 0: Mode label ────────────────────────────────────────────────
+    frame.render_widget(
+        Paragraph::new(app.mode.label())
+            .style(Style::default().fg(color).add_modifier(Modifier::BOLD)),
+        rows[0],
+    );
+
+    // ── Row 2: Time remaining + session count ────────────────────────────
+    // `Line::from(vec![...])` builds a single line from multiple styled spans.
+    // This lets different parts of the same line have different colors.
+    let time_line = Line::from(vec![
+        Span::styled(
+            app.time_str(),
             Style::default()
-                .fg(label_color)
+                .fg(Color::White)
                 .add_modifier(Modifier::BOLD),
-        )
-        .alignment(Alignment::Left);
+        ),
+        Span::raw("   "),
+        Span::styled(
+            format!("sessions done: {}", app.sessions_done),
+            Style::default().fg(Color::DarkGray),
+        ),
+    ]);
+    frame.render_widget(Paragraph::new(time_line), rows[2]);
 
-    // `render_widget` draws the widget into a specific chunk of the screen.
-    frame.render_widget(mode_label, rows[0]);
-
-    // ── 3. TIME REMAINING ────────────────────────────────────────────────
-    // A simple one-line text showing "24:07".
-    let time_widget = Paragraph::new(Span::styled(
-        app.time_str(),
-        Style::default()
-            .fg(Color::White)
-            .add_modifier(Modifier::BOLD),
-    ))
-    .alignment(Alignment::Left);
-
-    frame.render_widget(time_widget, rows[1]);
-
-    // ── 4. PROGRESS BAR ──────────────────────────────────────────────────
-    // `Gauge` is ratatui's built-in progress bar widget.
-    // `.ratio()` takes a f64 between 0.0 and 1.0.
+    // ── Row 4: Progress bar ──────────────────────────────────────────────
+    // `app.progress()` gives us a fresh f64 (0.0–1.0) computed from the
+    // real wall clock — that's what makes the bar move smoothly between ticks.
     let percent = (app.progress() * 100.0) as u16;
 
     let gauge = Gauge::default()
-        // No border — just the bare bar, like in the screenshot.
         .block(Block::default().borders(Borders::NONE))
         .gauge_style(
             Style::default()
-                .fg(mode_color(&app.mode))
-                .bg(Color::Rgb(40, 40, 55)), // Dark unfilled background
+                .fg(color)
+                .bg(Color::Rgb(35, 35, 50)),
         )
         .ratio(app.progress())
-        // The label shown in the center of the bar.
         .label(format!("{}%", percent));
 
-    frame.render_widget(gauge, rows[2]);
+    frame.render_widget(gauge, rows[4]);
 
-    // ── 5. HELP BAR ──────────────────────────────────────────────────────
-    // Shows the available keybinds at the bottom.
-    let status = if app.is_running { "▶ running" } else { "⏸ paused" };
+    // ── Row 6: Help bar ──────────────────────────────────────────────────
+    let status = if app.is_running {
+        Span::styled("▶ running", Style::default().fg(Color::Green))
+    } else {
+        Span::styled("⏸ paused ", Style::default().fg(Color::Yellow))
+    };
 
-    // `Line::from` builds a line from multiple `Span`s (each can have its own style).
     let help = Line::from(vec![
-        Span::styled(status, Style::default().fg(Color::Yellow)),
-        Span::raw("  [space] play/pause  [r] reset  [s] skip  [q] quit"),
+        status,
+        Span::raw("  [space] play/pause  [r] reset  [n] skip  [t] settings  [q] quit"),
     ]);
+    frame.render_widget(Paragraph::new(help), rows[6]);
+}
 
+// ─── SETTINGS SCREEN ─────────────────────────────────────────────────────────
+fn render_settings(frame: &mut Frame, app: &App) {
+    let rows = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(1)
+        .constraints([
+            Constraint::Length(1), // Title
+            Constraint::Length(1), // spacer
+            Constraint::Length(1), // Work duration row
+            Constraint::Length(1), // Short break row
+            Constraint::Length(1), // Long break row
+            Constraint::Min(0),    // spacer
+            Constraint::Length(1), // Help bar
+        ])
+        .split(frame.area());
+
+    // ── Title ────────────────────────────────────────────────────────────
     frame.render_widget(
-        Paragraph::new(help).alignment(Alignment::Left),
-        rows[4],
+        Paragraph::new("⚙  Settings")
+            .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+        rows[0],
+    );
+
+    // ── The three setting rows ────────────────────────────────────────────
+    // We zip the index, label, and value together and render each row.
+    let items = [
+        ("Work         ", app.work_secs / 60),
+        ("Short Break  ", app.short_break_secs / 60),
+        ("Long Break   ", app.long_break_secs / 60),
+    ];
+
+    for (i, (label, minutes)) in items.iter().enumerate() {
+        // Is this the currently selected row? Show it highlighted.
+        let is_selected = i == app.settings_idx;
+
+        let prefix = if is_selected { "▶ " } else { "  " };
+
+        let line = Line::from(vec![
+            Span::styled(
+                format!("{}{}", prefix, label),
+                if is_selected {
+                    Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default().fg(Color::Gray)
+                },
+            ),
+            Span::styled(
+                format!("{:2} min", minutes),
+                Style::default()
+                    .fg(Color::White)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            // Show hint only on the selected row
+            if is_selected {
+                Span::styled(
+                    "  ← → to adjust",
+                    Style::default().fg(Color::DarkGray),
+                )
+            } else {
+                Span::raw("")
+            },
+        ]);
+
+        // rows[2] is item 0, rows[3] is item 1, rows[4] is item 2
+        frame.render_widget(Paragraph::new(line), rows[2 + i]);
+    }
+
+    // ── Help bar ─────────────────────────────────────────────────────────
+    frame.render_widget(
+        Paragraph::new("  [↑↓] select  [←→] adjust  [t / enter] back to timer"),
+        rows[6],
     );
 }
 
 // ─── HELPER ──────────────────────────────────────────────────────────────────
-// A small private helper that picks a color for the current mode.
-// It's private (no `pub`) because only this file needs it.
 fn mode_color(mode: &Mode) -> Color {
     match mode {
-        Mode::Work => Color::Rgb(160, 100, 255), // Purple
-        Mode::ShortBreak => Color::Rgb(100, 220, 160), // Mint green
-        Mode::LongBreak => Color::Rgb(100, 180, 255),  // Sky blue
+        Mode::Work => Color::Rgb(160, 100, 255),       // Purple
+        Mode::ShortBreak => Color::Rgb(80, 210, 140),  // Mint
+        Mode::LongBreak => Color::Rgb(80, 170, 255),   // Sky blue
     }
 }
