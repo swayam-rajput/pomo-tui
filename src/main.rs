@@ -7,7 +7,7 @@ use std::{
 };
 // use anyhow::Result;
 use crossterm::{
-    event::{self,Event,KeyCode},
+    event::{self,Event,KeyCode, KeyEventKind},
     execute,
     terminal::{self, EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
@@ -19,7 +19,7 @@ use notify_rust::Notification;
 
 use crate::ui::render;
 
-const TICK_RATE: Duration = Duration::from_millis(10);
+const TICK_RATE: Duration = Duration::from_millis(100);
 
 fn main() -> Result<()>{
     let app = App::new(4);
@@ -48,28 +48,30 @@ fn main() -> Result<()>{
 }
 
 fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
-    let mut app = App::new(10);
+    let mut app = App::new(30);
     let mut last_tick = Instant::now();
 
     loop{
         terminal.draw(|f| ui::render(f, &app));
         if event::poll(Duration::from_millis(50))? {
             if let Event::Key(key) = event::read()? {
-                match key.code {
-                    KeyCode::Char('q') => return Ok(()),
-                    KeyCode::Char('r') => app.reset(),
-                    _ => {}
+                if key.kind == KeyEventKind::Press{
+                    match key.code {
+                        KeyCode::Char('q') => return Ok(()),
+                        KeyCode::Char('r') => app.reset(),
+                        KeyCode::Char(' ') => app.toggle_pause(),
+                        _ => {}
+                    }
                 }
             }
         }
 
-        if last_tick.elapsed() >= TICK_RATE{
+        if last_tick.elapsed() >= TICK_RATE {
+            app.tick();
             last_tick = Instant::now();
         }
 
-        if app.progress() >= 1.0{
-            break;
-        }
+
     }
     Ok(())
 
