@@ -11,9 +11,9 @@ pub enum Phase{
     LongBreak,
 }
 
-pub const WORK_TIME:Duration = Duration::from_secs(30);
+pub const WORK_TIME:Duration = Duration::from_secs(10);
 // pub const WORK_TIME:Duration = Duration::from_secs(1*60);
-pub const SHORTBREAK_TIME:Duration = Duration::from_secs(5*60);
+pub const SHORTBREAK_TIME:Duration = Duration::from_secs(60);
 pub const LONGBREAK_TIME:Duration = Duration::from_secs(15*60);
 pub const LONG_BREAK_AFTER: u32 = 4; // pomodoros before a long break
 
@@ -39,14 +39,15 @@ pub struct App{
     pub start: Instant,
     pub state: TimerState,
     pub elapsed: Duration,
-    pub pomodoros_done: u32
+    pub pomodoros_done: u32,
+    pub tick: u64,
 }
 
 
 impl App{
     // remove seconds
     pub fn new(seconds:u64)-> Self{
-        Self { start: Instant::now(), state: TimerState::Running, elapsed: Duration::ZERO, phase:Phase::Work, pomodoros_done:0, }
+        Self { start: Instant::now(), state: TimerState::Running, elapsed: Duration::ZERO, phase:Phase::Work, pomodoros_done:0, tick:0 }
     }
 
     pub fn progress(&self) -> f64 {
@@ -102,6 +103,7 @@ impl App{
 
         let elapsed_now = self.elapsed + self.start.elapsed();
         if elapsed_now >= self.phase.duration(){
+
             self.elapsed = self.phase.duration();
             self.state = TimerState::Done;
         }
@@ -126,6 +128,11 @@ impl App{
         self.elapsed = Duration::ZERO;
         self.start = Instant::now();
         self.state = TimerState::Running;
+    }
+
+    pub fn skip(&mut self) {
+        self.state = TimerState::Done;
+        self.elapsed = self.phase.duration();
     }
 
 }
