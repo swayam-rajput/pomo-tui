@@ -1,37 +1,277 @@
 
 use ratatui::{
     Frame, 
-    layout::{ Alignment, Layout, Direction, Constraint }, 
-    style::{Color, Style}, 
-    text::Span, 
+    layout::{ Alignment, Constraint, Direction, Layout, Rect }, 
+    style::{Color, Modifier, Style}, 
+    text::{Line, Span}, 
     widgets::{Block, Borders, Gauge, Paragraph}
 };
 
-use crate::app::App;
+use crate::app::{App, TimerState, Phase};
+
+const FILL_CHARS: &[char] = &[
+    '\u{2588}', // FULL BLOCK        ████
+];
+const RED:    Color = Color::Rgb(235,  87,  87);
+const ORANGE: Color = Color::Rgb(242, 153,  74);
+const GREEN:  Color = Color::Rgb(111, 207, 151);
+const GRAY:   Color = Color::Rgb(120, 120, 130);
+const WHITE:  Color = Color::Rgb(230, 230, 240);
+const DIM:    Color = Color::Rgb( 80,  80,  90);
+const BG:     Color = Color::Rgb( 18,  18,  24);
+
+fn phase_color(phase: &Phase) -> Color {
+    match phase {
+        Phase::Work       => RED,
+        Phase::ShortBreak => GREEN,
+        Phase::LongBreak  => ORANGE,
+    }
+}
+
+
+fn timer_fg(state: &TimerState, phase: &Phase) -> Color {
+    match state {
+        TimerState::Done   => GREEN,
+        TimerState::Paused => GRAY,
+        TimerState::Running => phase_color(phase),
+    }
+}
+fn h_center(area: Rect, width: u16) -> Rect {
+    let x = area.x + area.width.saturating_sub(width) / 2;
+    Rect { x, width: width.min(area.width), ..area }
+}
+
+pub fn progress_animation(progress: f64, tick: u64, width: u16, phase: &Phase) -> Vec<Span<'static>>{
+    let w = width as usize;
+    if w == 0 {
+        return vec![];
+    }
+    
+    let filled = ((progress * w as f64).floor() as usize).min(w);
+    let fg = phase_color(&phase);
+    let shimmer_len = if filled < w { 3_usize.min(w - filled) } else { 0 };
+    let fill_style = Style::default().fg(fg).add_modifier(Modifier::BOLD);
+    let empty_style = Style::default().fg(Color::Rgb(50, 50, 70));
+
+    let mut spans: Vec<Span<'static>> = Vec::new();
+       if filled > 0 {
+        let fill_chars: String = (0..filled)
+            .map(|i| {
+                // Each column has a phase offset based on its position.
+                // Dividing tick by different amounts gives different speeds.
+                let char_index = ((tick / 2) + i as u64) as usize;
+
+                // In the final 5% show only lightning bolts
+                let near_end = (i as f64 / w as f64) > 0.92 && progress > 0.92;
+
+                // During break phases bias toward hearts/stars
+                let chars = if near_end {
+                    &FILL_CHARS[0..] // lightning only
+                } else {
+                    match phase {
+                        Phase::Work => &FILL_CHARS[..],
+                        Phase::ShortBreak | Phase::LongBreak => &FILL_CHARS[0..],
+                    }
+                };
+
+                chars[char_index % chars.len()]
+            })
+            .collect();
+
+        spans.push(Span::styled(fill_chars, fill_style));
+    }
+    let empty_len = w.saturating_sub(filled + shimmer_len);
+    if empty_len > 0 {
+        let empty_chars: String = std::iter::repeat('\u{2591}').take(empty_len).collect();
+        spans.push(Span::styled(empty_chars, empty_style));
+    }
+
+    
+    return spans;
+
+
+
+
+    
+}
+
+
+
+
+
 
 pub fn render(f: &mut Frame, app: &App){
 
     
+    // ── outer vertical layout ────────────────────────────────────────────────
+    //  [0] top padding
+    //  [1] phase label          (1 line)
+    //  [2] spacer               (1 line)
+    //  [3] big timer            (1 line)
+    //  [4] spacer               (1 line)
+    //  [5] progress gauge       (3 lines)
+    //  [6] spacer               (1 line)
+    //  [7] status + pomodoros   (1 line)
+    //  [8] spacer               (1 line)
+    //  [9] keybinds hint        (1 line)
+    // [10] bottom padding
 
     let chunks = Layout::default()
     .direction(Direction::Vertical)
+    .margin(3)
     .constraints([
-        Constraint::Length(3),
-        Constraint::Length(3),
-        // Constraint::Min(1),
-    ]).split(f.area());
+        Constraint::Min(1),       // top spacer
+        Constraint::Length(3),    // phase label + pomodoro count
+        Constraint::Length(5),    // big timer display
+        Constraint::Length(5),    // the chaos bar
+        Constraint::Length(3),    // status / done message
+        Constraint::Length(2),    // keybind hints
+        Constraint::Min(1),   
+    ])
+    .split(f.area());    
 
-    let gauge = Gauge::default().block(Block::bordered().title("Timer").borders(Borders::ALL)).ratio(app.progress());
 
-    f.render_widget(gauge, chunks[0]);
+    let bar_block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Rgb(60, 60, 80)))
+        .title(Span::styled(
+            format!(" {:.0}% ", app.progress() * 100.0),
+            Style::default().fg(Color::Rgb(160, 160, 180)),
+        ))
+        .title_alignment(Alignment::Right);
+    let bar_inner = bar_block.inner(chunks[3]);
+    f.render_widget(bar_block, chunks[3]);
+
+    let bar_row = Rect {
+        x: bar_inner.x,
+        y: bar_inner.y + bar_inner.height / 2,
+        width: bar_inner.width,
+        height: 1,
+    };
+
+    let bar_spans = progress_animation(app.progress(), app.tick, bar_row.width, &app.phase);
+    let bar_line = Line::from(bar_spans);
+    f.render_widget(Paragraph::new(bar_line), bar_row);
+
+
+    let gauge_color = match app.state {
+        TimerState::Done   => GREEN,
+        TimerState::Paused => GRAY,
+        TimerState::Running => phase_color(&app.phase),
+    };
+
+    // let gauge = Gauge::default().gauge_style(Style::default().fg(gauge_color).bg(BG)).block(Block::default().title("Timer").borders(Borders::ALL)).label("").ratio(app.progress());
+    // f.render_widget(gauge, bar_inner);
+    
+
     let (m,s) = app.remaining();
     let time_str = format!("{:02}:{:02}",m,s);
-    // println!("{}",time_str)
-    let time_widget = Paragraph::new(
-        Span::styled(
-            time_str,
-            Style::default().fg(Color::LightCyan),
-        )
+    let timer_style = Style::default()
+    .fg(timer_fg(&app.state, &app.phase)).add_modifier(Modifier::BOLD);
+
+    let time_widget = Paragraph::new(Span::styled(time_str,timer_style)
     ).alignment(Alignment::Center);
-    f.render_widget(time_widget, chunks[1]);
+    f.render_widget(time_widget, chunks[2]);
+
+
+
+
+       let status_widget = match app.state {
+        TimerState::Running => {
+            let msg = if app.progress() > 0.9 {
+                // Increasingly frantic messages as time runs out
+                match ((app.progress() - 0.9) * 100.0) as u32 {
+                    0..=3  => "almost there...",
+                    4..=6  => "keep going!!",
+                    7..=8  => "DO NOT STOP",
+                    _      => "FINISH IT",
+                }
+            } else {
+                "stay focused"
+            };
+            Paragraph::new(Span::styled(
+                msg,
+                Style::default().fg(Color::Rgb(100, 100, 120)).add_modifier(Modifier::ITALIC),
+            ))
+            .alignment(Alignment::Center)
+        }
+
+        TimerState::Paused => Paragraph::new(Line::from(vec![
+            Span::styled(
+                " PAUSED ",
+                Style::default()
+                    .fg(Color::Black)
+                    .bg(Color::Rgb(200, 180, 80))
+                    .add_modifier(Modifier::BOLD),
+            ),
+        ]))
+        .alignment(Alignment::Center),
+
+        TimerState::Done => {
+            let msg = match app.phase {
+                Phase::Work => "session complete. take a breath.",
+                Phase::ShortBreak | Phase::LongBreak => "break over. back to it.",
+            };
+            Paragraph::new(Span::styled(
+                msg,
+                Style::default()
+                    .fg(Color::Rgb(100, 255, 180))
+                    .add_modifier(Modifier::BOLD),
+            ))
+            .alignment(Alignment::Center)
+        }
+    };
+    f.render_widget(status_widget, chunks[4]);
+
+    // let status_widget = Paragraph::new(Span::styled(,
+    // Style::default()
+    //         .fg(Color::Black)
+    //         .bg(Color::Rgb(200, 180, 80))
+    //         // .add_modifier(Modifier::BOLD),
+    // )).alignment(Alignment::Center);
+    // f.render_widget(status_widget, chunks[4]);
+
+
+    let (phase_label, phase_bg) = match app.phase {
+        Phase::Work       => (" ● FOCUS ",      RED),
+        Phase::ShortBreak => (" ● SHORT BREAK ", GREEN),
+        Phase::LongBreak  => (" ● LONG BREAK ",  ORANGE),
+    };
+
+    let pomodoro_dots: String = {
+        let done = app.pomodoros_done % 4;
+        let filled = "\u{25CF}".repeat(done as usize);      // ●
+        let empty  = "\u{25CB}".repeat((4 - done) as usize); // ○
+        format!("{}{}", filled, empty)
+    };
+
+    let phase_widget = Line::from(vec!(
+        Span::styled(
+            phase_label,
+            Style::default()
+                .fg(BG)
+                .bg(phase_bg)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::raw("   "),
+        Span::styled(pomodoro_dots, Style::default().fg(phase_bg)),
+    )).alignment(Alignment::Center);
+    
+    f.render_widget(phase_widget, chunks[0]);
+
+    let hints = match app.state {
+        TimerState::Done => "[enter] next phase   [q] quit",
+        _ => "[space] pause/resume   [s] skip   [q] quit",
+    };
+    f.render_widget(
+        Paragraph::new(Span::styled(
+            hints,
+            Style::default().fg(Color::Rgb(60, 60, 80)),
+        ))
+        .alignment(Alignment::Center),
+        chunks[5],
+    );
+
+
+
 }
