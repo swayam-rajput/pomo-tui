@@ -13,9 +13,9 @@ pub enum Phase{
     LongBreak,
 }
 
-pub const WORK_TIME:Duration = Duration::from_secs(10);
-pub const SHORTBREAK_TIME:Duration = Duration::from_secs(10);
-pub const LONGBREAK_TIME:Duration = Duration::from_secs(10);
+pub const WORK_TIME:Duration = Duration::from_secs(25*60);
+pub const SHORTBREAK_TIME:Duration = Duration::from_secs(5*60);
+pub const LONGBREAK_TIME:Duration = Duration::from_secs(15*60);
 
 
 #[derive(Clone, Copy, PartialEq)]
