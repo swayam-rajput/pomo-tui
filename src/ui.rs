@@ -12,9 +12,10 @@ use crate::app::{App, NotificationMode, Phase, Screen, TimerState};
 const FILL_CHARS: &[char] = &[
     '\u{2588}', // FULL BLOCK        ████
 ];
-const RED:    Color = Color::Rgb(235,  87,  87);
+const RED:    Color = Color::Rgb(151, 216, 156);
+// const RED:    Color = Color::Rgb(121, 174, 111);
 const ORANGE: Color = Color::Rgb(242, 153,  74);
-const GREEN:  Color = Color::Rgb(111, 207, 151);
+const GREEN:  Color = Color::Rgb(180, 211, 217);
 const GRAY:   Color = Color::Rgb(120, 120, 130);
 // const WHITE:  Color = Color::Rgb(230, 230, 240);
 // const DIM:    Color = Color::Rgb( 80,  80,  90);
@@ -31,7 +32,7 @@ fn phase_color(phase: &Phase) -> Color {
 
 fn timer_fg(state: &TimerState, phase: &Phase) -> Color {
     match state {
-        TimerState::Done   => GREEN,
+        TimerState::Done   => phase_color(phase),
         TimerState::Paused => GRAY,
         TimerState::Running => phase_color(phase),
     }
@@ -116,10 +117,9 @@ fn render_settings(frame: &mut Frame, app: &App) {
         ])
         .split(frame.area());
 
-    // ── Title ────────────────────────────────────────────────────────────
     frame.render_widget(
         Paragraph::new("⚙  Settings")
-            .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            .style(Style::default().fg(Color::Rgb(111, 207, 151)).add_modifier(Modifier::BOLD)),
         rows[0],
     );
 
@@ -134,22 +134,21 @@ fn render_settings(frame: &mut Frame, app: &App) {
 
     for (i, (label, value)) in items.iter().enumerate() {
     let is_selected = i == app.settings_idx;
-    let prefix = if is_selected { "▶ " } else { "  " };
+    let prefix = if is_selected { "> " } else { "  " };
 
     let line = Line::from(vec![
         Span::styled(
             format!("{}{}", prefix, label),
             if is_selected {
-                Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
+                Style::default().fg(Color::Rgb(111, 207, 151)).add_modifier(Modifier::BOLD)
             } else {
                 Style::default().fg(Color::Gray)
             },
         ),
         Span::styled(
-            format!(" {}", value),
+            format!("   {}", value),
             Style::default()
                 .fg(Color::White)
-                .add_modifier(Modifier::BOLD),
         ),
         if is_selected {
             Span::styled("  ← → to adjust", Style::default().fg(Color::DarkGray))
@@ -160,14 +159,11 @@ fn render_settings(frame: &mut Frame, app: &App) {
 
     frame.render_widget(Paragraph::new(line), rows[2 + i]);
 }
-    // ── Help bar ─────────────────────────────────────────────────────────
     frame.render_widget(
         Paragraph::new("  [↑↓] select  [←→] adjust  [t / enter] back to timer"),
         rows[6],
     );
 }
-
-
 
 pub fn render_timer(f: &mut Frame, app: &App){
 
@@ -271,22 +267,13 @@ pub fn render_timer(f: &mut Frame, app: &App){
             Paragraph::new(Span::styled(
                 msg,
                 Style::default()
-                    .fg(Color::Rgb(100, 255, 180))
+                    .fg(phase_color(&app.phase))
                     .add_modifier(Modifier::BOLD),
             ))
             .alignment(Alignment::Center)
         }
     };
     f.render_widget(status_widget, chunks[4]);
-
-    // let status_widget = Paragraph::new(Span::styled(,
-    // Style::default()
-    //         .fg(Color::Black)
-    //         .bg(Color::Rgb(200, 180, 80))
-    //         // .add_modifier(Modifier::BOLD),
-    // )).alignment(Alignment::Center);
-    // f.render_widget(status_widget, chunks[4]);
-
 
     let (phase_label, phase_bg) = match app.phase {
         Phase::Work       => (" ● FOCUS ",      RED),
@@ -327,14 +314,7 @@ pub fn render_timer(f: &mut Frame, app: &App){
         .alignment(Alignment::Center),
         chunks[5],
     );
-
-
-
 }
-
-
-
-
 
 pub fn render(f: &mut Frame, app: &App){
     match app.screen {
