@@ -12,10 +12,10 @@ use crate::app::{App, NotificationMode, Phase, Screen, TimerState};
 const FILL_CHARS: &[char] = &[
     '\u{2588}', // FULL BLOCK        ████
 ];
-const RED:    Color = Color::Rgb(151, 216, 156);
+const RED:    Color = Color::Rgb(123, 204, 140);
 // const RED:    Color = Color::Rgb(121, 174, 111);
 const ORANGE: Color = Color::Rgb(242, 153,  74);
-const GREEN:  Color = Color::Rgb(180, 211, 217);
+const GREEN:  Color = Color::Rgb(164, 188, 224);
 const GRAY:   Color = Color::Rgb(120, 120, 130);
 // const WHITE:  Color = Color::Rgb(230, 230, 240);
 // const DIM:    Color = Color::Rgb( 80,  80,  90);
