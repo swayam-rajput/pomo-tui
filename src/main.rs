@@ -17,7 +17,7 @@ use app::App;
 use std::{thread::sleep};
 use notify_rust::Notification;
 
-use crate::app::TimerState;
+use crate::app::{Screen, TimerState};
 use crate::ui::render;
 
 const TICK_RATE: Duration = Duration::from_millis(100);
@@ -48,25 +48,58 @@ fn main() -> Result<()>{
     result
 }
 
+
+fn handle_timer_keys(app: &mut App, key: KeyCode) -> bool {
+    match key {
+        KeyCode::Char('q') => return true, // signal quit
+        KeyCode::Char(' ') => app.toggle_pause(),
+        KeyCode::Char('r') => app.reset(),
+        KeyCode::Char('s') => app.skip(),
+        KeyCode::Char('t') => app.screen = Screen::Settings,
+        KeyCode::Enter => {
+            if app.state == TimerState::Done {
+                app.advance();
+            }
+        }
+        _ => {}
+    }
+    false
+}
+fn handle_settings_keys(app: &mut App, key: KeyCode) -> bool {
+    match key {
+        KeyCode::Up => app.settings_up(),
+        KeyCode::Down => app.settings_down(),
+        KeyCode::Left => app.adjust_selected(-1),
+        KeyCode::Right => app.adjust_selected(1),
+        KeyCode::Char('H') => app.adjust_selected(-5),
+        KeyCode::Char('L') => app.adjust_selected(5),
+        KeyCode::Char('t') | KeyCode::Enter => app.screen = Screen::Timer,
+        KeyCode::Char('q') => return true,
+        _ => {}
+    }
+    false
+}
+
+
+
+
+
 fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
     let mut app = App::new(30);
     let mut last_tick = Instant::now();
 
     loop{
-        terminal.draw(|f| ui::render(f, &app));
+        terminal.draw(|f| ui::render(f, &app))?;
         if event::poll(Duration::from_millis(50))? {
             if let Event::Key(key) = event::read()? {
                 if key.kind == KeyEventKind::Press{
-                    match key.code {
-                        KeyCode::Char('q') => return Ok(()),
-                        KeyCode::Char('r') => app.reset(),
-                        KeyCode::Char(' ') => app.toggle_pause(),
-                        KeyCode::Char('s') => app.skip(),
-                        KeyCode::Enter => if app.state == TimerState::Done {
-                            app.advance();
-                        },
+                    let should_quit = match app.screen {
+                        Screen::Timer => handle_timer_keys(&mut app, key.code),
+                        Screen::Settings => handle_settings_keys(&mut app, key.code),
+                    };
 
-                        _ => {}
+                    if should_quit {
+                        return Ok(());
                     }
                 }
             }

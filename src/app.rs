@@ -11,12 +11,16 @@ pub enum Phase{
     LongBreak,
 }
 
-pub const WORK_TIME:Duration = Duration::from_secs(10);
-// pub const WORK_TIME:Duration = Duration::from_secs(1*60);
+pub const WORK_TIME:Duration = Duration::from_secs(1*60);
 pub const SHORTBREAK_TIME:Duration = Duration::from_secs(60);
 pub const LONGBREAK_TIME:Duration = Duration::from_secs(15*60);
-pub const LONG_BREAK_AFTER: u32 = 4; // pomodoros before a long break
 
+
+#[derive(Clone, Copy, PartialEq)]
+pub enum Screen {
+    Timer,
+    Settings,
+}
 
 impl Phase{
     pub fn duration(&self) -> Duration{
@@ -41,13 +45,36 @@ pub struct App{
     pub elapsed: Duration,
     pub pomodoros_done: u32,
     pub tick: u64,
+
+    pub screen:Screen,
+    
+    pub settings_idx: usize,
+    
+    pub work_secs: u64,
+    pub short_break_secs: u64,
+    pub long_break_secs: u64,
 }
 
 
 impl App{
     // remove seconds
     pub fn new(seconds:u64)-> Self{
-        Self { start: Instant::now(), state: TimerState::Running, elapsed: Duration::ZERO, phase:Phase::Work, pomodoros_done:0, tick:0 }
+        Self { 
+            start: Instant::now(),
+            state: TimerState::Running,
+            elapsed: Duration::ZERO,
+            phase:Phase::Work,
+            pomodoros_done:0,
+            tick:0,
+
+            screen:Screen::Timer,
+
+            work_secs:WORK_TIME.as_secs(),
+            short_break_secs:SHORTBREAK_TIME.as_secs(),
+            long_break_secs:LONGBREAK_TIME.as_secs(),
+            
+            settings_idx:0
+        }
     }
 
     pub fn progress(&self) -> f64 {
@@ -133,6 +160,37 @@ impl App{
     pub fn skip(&mut self) {
         self.state = TimerState::Done;
         self.elapsed = self.phase.duration();
+    }
+
+
+
+    // settings functions
+     pub fn settings_up(&mut self) {
+        if self.settings_idx > 0 {
+            self.settings_idx -= 1;
+        }
+    }
+
+    pub fn settings_down(&mut self) {
+        if self.settings_idx < 2 {
+            self.settings_idx += 1;
+        }
+    }
+
+    // Adjust the currently selected setting by `delta` minutes.
+    // We allow 1–99 minutes for any session.
+    pub fn adjust_selected(&mut self, delta: i64) {
+        let target = match self.settings_idx {
+            0 => &mut self.work_secs,
+            1 => &mut self.short_break_secs,
+            _ => &mut self.long_break_secs,
+        };
+        let minutes = (*target as i64 / 60 + delta).clamp(1, 99);
+        *target = minutes as u64 * 60;
+
+        // If we changed the active mode's duration, reset the timer so it
+        // doesn't confusingly show a time beyond the new total.
+        self.reset();
     }
 
 }

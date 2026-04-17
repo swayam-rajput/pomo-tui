@@ -7,7 +7,7 @@ use ratatui::{
     widgets::{Block, Borders, Gauge, Paragraph}
 };
 
-use crate::app::{App, TimerState, Phase};
+use crate::app::{App, Phase, Screen, TimerState};
 
 const FILL_CHARS: &[char] = &[
     '\u{2588}', // FULL BLOCK        ████
@@ -36,10 +36,7 @@ fn timer_fg(state: &TimerState, phase: &Phase) -> Color {
         TimerState::Running => phase_color(phase),
     }
 }
-fn h_center(area: Rect, width: u16) -> Rect {
-    let x = area.x + area.width.saturating_sub(width) / 2;
-    Rect { x, width: width.min(area.width), ..area }
-}
+
 
 pub fn progress_animation(progress: f64, tick: u64, width: u16, phase: &Phase) -> Vec<Span<'static>>{
     let w = width as usize;
@@ -96,11 +93,82 @@ pub fn progress_animation(progress: f64, tick: u64, width: u16, phase: &Phase) -
 }
 
 
+fn render_settings(frame: &mut Frame, app: &App) {
+    let rows = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(1)
+        .constraints([
+            Constraint::Length(1), // Title
+            Constraint::Length(1), // spacer
+            Constraint::Length(1), // Work duration row
+            Constraint::Length(1), // Short break row
+            Constraint::Length(1), // Long break row
+            Constraint::Min(0),    // spacer
+            Constraint::Length(1), // Help bar
+        ])
+        .split(frame.area());
+
+    // ── Title ────────────────────────────────────────────────────────────
+    frame.render_widget(
+        Paragraph::new("⚙  Settings")
+            .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+        rows[0],
+    );
+
+    // ── The three setting rows ────────────────────────────────────────────
+    // We zip the index, label, and value together and render each row.
+    let items = [
+        ("Work         ", app.work_secs / 60),
+        ("Short Break  ", app.short_break_secs / 60),
+        ("Long Break   ", app.long_break_secs / 60),
+    ];
+
+    for (i, (label, minutes)) in items.iter().enumerate() {
+        // Is this the currently selected row? Show it highlighted.
+        let is_selected = i == app.settings_idx;
+
+        let prefix = if is_selected { "▶ " } else { "  " };
+
+        let line = Line::from(vec![
+            Span::styled(
+                format!("{}{}", prefix, label),
+                if is_selected {
+                    Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default().fg(Color::Gray)
+                },
+            ),
+            Span::styled(
+                format!("{:2} min", minutes),
+                Style::default()
+                    .fg(Color::White)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            // Show hint only on the selected row
+            if is_selected {
+                Span::styled(
+                    "  ← → to adjust",
+                    Style::default().fg(Color::DarkGray),
+                )
+            } else {
+                Span::raw("")
+            },
+        ]);
+
+        // rows[2] is item 0, rows[3] is item 1, rows[4] is item 2
+        frame.render_widget(Paragraph::new(line), rows[2 + i]);
+    }
+
+    // ── Help bar ─────────────────────────────────────────────────────────
+    frame.render_widget(
+        Paragraph::new("  [↑↓] select  [←→] adjust  [t / enter] back to timer"),
+        rows[6],
+    );
+}
 
 
 
-
-pub fn render(f: &mut Frame, app: &App){
+pub fn render_timer(f: &mut Frame, app: &App){
 
     
     // ── outer vertical layout ────────────────────────────────────────────────
@@ -261,7 +329,7 @@ pub fn render(f: &mut Frame, app: &App){
 
     let hints = match app.state {
         TimerState::Done => "[enter] next phase   [q] quit",
-        _ => "[space] pause/resume   [s] skip   [q] quit",
+        _ => "[space] pause/resume   [s] skip    [r] reset   [q] quit",
     };
     f.render_widget(
         Paragraph::new(Span::styled(
@@ -274,4 +342,15 @@ pub fn render(f: &mut Frame, app: &App){
 
 
 
+}
+
+
+
+
+
+pub fn render(f: &mut Frame, app: &App){
+    match app.screen {
+        Screen::Timer => render_timer(f, app),
+        Screen::Settings => render_settings(f, app),
+    }
 }
