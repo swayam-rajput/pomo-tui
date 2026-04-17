@@ -17,6 +17,7 @@ use app::App;
 use std::{thread::sleep};
 use notify_rust::Notification;
 
+use crate::app::TimerState;
 use crate::ui::render;
 
 const TICK_RATE: Duration = Duration::from_millis(100);
@@ -60,6 +61,11 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> 
                         KeyCode::Char('q') => return Ok(()),
                         KeyCode::Char('r') => app.reset(),
                         KeyCode::Char(' ') => app.toggle_pause(),
+                        KeyCode::Char('s') => app.skip(),
+                        KeyCode::Enter => if app.state == TimerState::Done {
+                            app.advance();
+                        },
+
                         _ => {}
                     }
                 }
