@@ -77,6 +77,14 @@ impl App{
         }
     }
 
+    pub fn current_duration(&self) -> Duration{
+        match self.phase {
+            Phase::Work => Duration::from_secs(self.work_secs),
+            Phase::ShortBreak => Duration::from_secs(self.short_break_secs),
+            Phase::LongBreak => Duration::from_secs(self.long_break_secs),
+        }
+    }
+
     pub fn progress(&self) -> f64 {
         let elapsed = if self.state == TimerState::Running{
             self.elapsed + self.start.elapsed()
@@ -84,7 +92,7 @@ impl App{
         else{
             self.elapsed
         };
-        let total = self.phase.duration().as_secs_f64();
+        let total = self.current_duration().as_secs_f64();
         let current = elapsed.as_secs_f64();
         (current / total).min(1.0)
     }
@@ -118,7 +126,7 @@ impl App{
             self.elapsed
         };
 
-        let remaining = self.phase.duration().saturating_sub(elapsed);
+        let remaining = self.current_duration().saturating_sub(elapsed);
         let secs = remaining.as_secs();
         (secs/60,secs%60)
     }
@@ -129,9 +137,9 @@ impl App{
         }
 
         let elapsed_now = self.elapsed + self.start.elapsed();
-        if elapsed_now >= self.phase.duration(){
+        if elapsed_now >= self.current_duration(){
 
-            self.elapsed = self.phase.duration();
+            self.elapsed = self.current_duration();
             self.state = TimerState::Done;
         }
     }
@@ -159,7 +167,7 @@ impl App{
 
     pub fn skip(&mut self) {
         self.state = TimerState::Done;
-        self.elapsed = self.phase.duration();
+        self.elapsed = self.current_duration();
     }
 
 
@@ -188,9 +196,12 @@ impl App{
         let minutes = (*target as i64 / 60 + delta).clamp(1, 99);
         *target = minutes as u64 * 60;
 
-        // If we changed the active mode's duration, reset the timer so it
-        // doesn't confusingly show a time beyond the new total.
-        self.reset();
+        match self.settings_idx {
+            0 if self.phase == Phase::Work => self.reset(),
+            1 if self.phase == Phase::ShortBreak => self.reset(),
+            2 if self.phase == Phase::LongBreak => self.reset(),
+            _ => {}
+        }
     }
 
 }
