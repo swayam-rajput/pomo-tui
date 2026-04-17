@@ -4,10 +4,10 @@ use ratatui::{
     layout::{ Alignment, Constraint, Direction, Layout, Rect }, 
     style::{Color, Modifier, Style}, 
     text::{Line, Span}, 
-    widgets::{Block, Borders, Gauge, Paragraph}
+    widgets::{Block, Borders, Paragraph}
 };
 
-use crate::app::{App, Phase, Screen, TimerState};
+use crate::app::{App, NotificationMode, Phase, Screen, TimerState};
 
 const FILL_CHARS: &[char] = &[
     '\u{2588}', // FULL BLOCK        ████
@@ -16,8 +16,8 @@ const RED:    Color = Color::Rgb(235,  87,  87);
 const ORANGE: Color = Color::Rgb(242, 153,  74);
 const GREEN:  Color = Color::Rgb(111, 207, 151);
 const GRAY:   Color = Color::Rgb(120, 120, 130);
-const WHITE:  Color = Color::Rgb(230, 230, 240);
-const DIM:    Color = Color::Rgb( 80,  80,  90);
+// const WHITE:  Color = Color::Rgb(230, 230, 240);
+// const DIM:    Color = Color::Rgb( 80,  80,  90);
 const BG:     Color = Color::Rgb( 18,  18,  24);
 
 fn phase_color(phase: &Phase) -> Color {
@@ -92,6 +92,14 @@ pub fn progress_animation(progress: f64, tick: u64, width: u16, phase: &Phase) -
     
 }
 
+fn notification_label(mode: NotificationMode) -> &'static str {
+    match mode {
+        NotificationMode::Off => "Off",
+        NotificationMode::WorkOnly => "Work Only",
+        NotificationMode::BreakOnly => "Break Only",
+        NotificationMode::All => "All",
+    }
+}
 
 fn render_settings(frame: &mut Frame, app: &App) {
     let rows = Layout::default()
@@ -118,47 +126,40 @@ fn render_settings(frame: &mut Frame, app: &App) {
     // ── The three setting rows ────────────────────────────────────────────
     // We zip the index, label, and value together and render each row.
     let items = [
-        ("Work         ", app.work_secs / 60),
-        ("Short Break  ", app.short_break_secs / 60),
-        ("Long Break   ", app.long_break_secs / 60),
+        ("Work         ", format!("{} min", app.work_secs / 60)),
+        ("Short Break  ", format!("{} min", app.short_break_secs / 60)),
+        ("Long Break   ", format!("{} min", app.long_break_secs / 60)),
+        ("Notifications", notification_label(app.notif_mode).to_string()),
     ];
 
-    for (i, (label, minutes)) in items.iter().enumerate() {
-        // Is this the currently selected row? Show it highlighted.
-        let is_selected = i == app.settings_idx;
+    for (i, (label, value)) in items.iter().enumerate() {
+    let is_selected = i == app.settings_idx;
+    let prefix = if is_selected { "▶ " } else { "  " };
 
-        let prefix = if is_selected { "▶ " } else { "  " };
-
-        let line = Line::from(vec![
-            Span::styled(
-                format!("{}{}", prefix, label),
-                if is_selected {
-                    Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
-                } else {
-                    Style::default().fg(Color::Gray)
-                },
-            ),
-            Span::styled(
-                format!("{:2} min", minutes),
-                Style::default()
-                    .fg(Color::White)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            // Show hint only on the selected row
+    let line = Line::from(vec![
+        Span::styled(
+            format!("{}{}", prefix, label),
             if is_selected {
-                Span::styled(
-                    "  ← → to adjust",
-                    Style::default().fg(Color::DarkGray),
-                )
+                Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
             } else {
-                Span::raw("")
+                Style::default().fg(Color::Gray)
             },
-        ]);
+        ),
+        Span::styled(
+            format!(" {}", value),
+            Style::default()
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD),
+        ),
+        if is_selected {
+            Span::styled("  ← → to adjust", Style::default().fg(Color::DarkGray))
+        } else {
+            Span::raw("")
+        },
+    ]);
 
-        // rows[2] is item 0, rows[3] is item 1, rows[4] is item 2
-        frame.render_widget(Paragraph::new(line), rows[2 + i]);
-    }
-
+    frame.render_widget(Paragraph::new(line), rows[2 + i]);
+}
     // ── Help bar ─────────────────────────────────────────────────────────
     frame.render_widget(
         Paragraph::new("  [↑↓] select  [←→] adjust  [t / enter] back to timer"),
@@ -221,17 +222,6 @@ pub fn render_timer(f: &mut Frame, app: &App){
     let bar_line = Line::from(bar_spans);
     f.render_widget(Paragraph::new(bar_line), bar_row);
 
-
-    let gauge_color = match app.state {
-        TimerState::Done   => GREEN,
-        TimerState::Paused => GRAY,
-        TimerState::Running => phase_color(&app.phase),
-    };
-
-    // let gauge = Gauge::default().gauge_style(Style::default().fg(gauge_color).bg(BG)).block(Block::default().title("Timer").borders(Borders::ALL)).label("").ratio(app.progress());
-    // f.render_widget(gauge, bar_inner);
-    
-
     let (m,s) = app.remaining();
     let time_str = format!("{:02}:{:02}",m,s);
     let timer_style = Style::default()
@@ -244,15 +234,13 @@ pub fn render_timer(f: &mut Frame, app: &App){
 
 
 
-       let status_widget = match app.state {
+    let status_widget = match app.state {
         TimerState::Running => {
             let msg = if app.progress() > 0.9 {
                 // Increasingly frantic messages as time runs out
                 match ((app.progress() - 0.9) * 100.0) as u32 {
-                    0..=3  => "almost there...",
-                    4..=6  => "keep going!!",
-                    7..=8  => "DO NOT STOP",
-                    _      => "FINISH IT",
+                    0..7  => "almost there...",
+                    _    => "FINISHED",
                 }
             } else {
                 "stay focused"
@@ -329,7 +317,7 @@ pub fn render_timer(f: &mut Frame, app: &App){
 
     let hints = match app.state {
         TimerState::Done => "[enter] next phase   [q] quit",
-        _ => "[space] pause/resume   [s] skip    [r] reset   [q] quit",
+        _ => "[space] pause/resume   [s] skip   [r] reset   [t] settings   [q] quit",
     };
     f.render_widget(
         Paragraph::new(Span::styled(

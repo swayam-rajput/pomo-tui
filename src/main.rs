@@ -1,5 +1,6 @@
 mod app;
 mod ui;
+mod notify;
 
 use std::{
     io,
@@ -9,31 +10,21 @@ use std::{
 use crossterm::{
     event::{self,Event,KeyCode, KeyEventKind},
     execute,
-    terminal::{self, EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
-use ratatui::{Terminal, backend::{self, CrosstermBackend}};
+use notify_rust::Notification;
+use ratatui::{Terminal, backend::{ CrosstermBackend}};
 use anyhow::Result;
 use app::App;
-use std::{thread::sleep};
-use notify_rust::Notification;
 
-use crate::app::{Screen, TimerState};
-use crate::ui::render;
+use crate::{app::{Screen, TimerState}, notify::send_notification};
 
 const TICK_RATE: Duration = Duration::from_millis(100);
 
 fn main() -> Result<()>{
-    let app = App::new(4);
-    // Notification::new()
-    // .summary("Pomodoro Started")
-    // .auto_icon()
-    // .body("Focus and get to work.")
-    // .show()
-    // .unwrap();
-
     enable_raw_mode()?;
     let mut stdout = io::stdout();
-    execute!(stdout,EnterAlternateScreen);
+    let _ =execute!(stdout,EnterAlternateScreen);
 
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
@@ -43,7 +34,7 @@ fn main() -> Result<()>{
     let result = run_app(&mut terminal);
 
     disable_raw_mode()?;
-    execute!(terminal.backend_mut(),LeaveAlternateScreen);
+    let _ = execute!(terminal.backend_mut(),LeaveAlternateScreen);
     terminal.show_cursor()?;
     result
 }
@@ -85,9 +76,15 @@ fn handle_settings_keys(app: &mut App, key: KeyCode) -> bool {
 
 
 fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
-    let mut app = App::new(30);
+    let mut app = App::new();
     let mut last_tick = Instant::now();
-
+    if app.should_notify(){
+        Notification::new()
+        .summary("focus session started")
+        .body("your timer is ready").timeout(Duration::from_millis(1000))
+        .show()
+        .ok();
+    }
     loop{
         terminal.draw(|f| ui::render(f, &app))?;
         if event::poll(Duration::from_millis(50))? {
@@ -112,6 +109,4 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> 
 
 
     }
-    Ok(())
-
 }

@@ -1,4 +1,6 @@
 use std::time::{Duration, Instant};
+
+use crate::notify::send_notification;
 #[derive(Debug, Clone, PartialEq)]
 pub enum TimerState{
     Running, Paused, Done
@@ -11,9 +13,9 @@ pub enum Phase{
     LongBreak,
 }
 
-pub const WORK_TIME:Duration = Duration::from_secs(1*60);
-pub const SHORTBREAK_TIME:Duration = Duration::from_secs(60);
-pub const LONGBREAK_TIME:Duration = Duration::from_secs(15*60);
+pub const WORK_TIME:Duration = Duration::from_secs(10);
+pub const SHORTBREAK_TIME:Duration = Duration::from_secs(10);
+pub const LONGBREAK_TIME:Duration = Duration::from_secs(10);
 
 
 #[derive(Clone, Copy, PartialEq)]
@@ -22,17 +24,12 @@ pub enum Screen {
     Settings,
 }
 
-impl Phase{
-    pub fn duration(&self) -> Duration{
-        match self {
-            Phase::Work => WORK_TIME,
-            Phase::ShortBreak => SHORTBREAK_TIME,
-            Phase::LongBreak => LONGBREAK_TIME,
-        }
-    }
-    // pub fn label(&self) -> str{
-
-    // }
+#[derive(Clone, Copy, PartialEq)]
+pub enum NotificationMode {
+    Off,
+    WorkOnly,
+    BreakOnly,
+    All,
 }
 
 
@@ -53,12 +50,14 @@ pub struct App{
     pub work_secs: u64,
     pub short_break_secs: u64,
     pub long_break_secs: u64,
+
+    pub notif_mode: NotificationMode,
 }
 
 
 impl App{
     // remove seconds
-    pub fn new(seconds:u64)-> Self{
+    pub fn new()-> Self{
         Self { 
             start: Instant::now(),
             state: TimerState::Running,
@@ -73,11 +72,13 @@ impl App{
             short_break_secs:SHORTBREAK_TIME.as_secs(),
             long_break_secs:LONGBREAK_TIME.as_secs(),
             
-            settings_idx:0
+            settings_idx:0,
+
+            notif_mode: NotificationMode::WorkOnly,
         }
     }
 
-    pub fn current_duration(&self) -> Duration{
+    fn current_duration(&self) -> Duration{
         match self.phase {
             Phase::Work => Duration::from_secs(self.work_secs),
             Phase::ShortBreak => Duration::from_secs(self.short_break_secs),
@@ -138,9 +139,11 @@ impl App{
 
         let elapsed_now = self.elapsed + self.start.elapsed();
         if elapsed_now >= self.current_duration(){
-
             self.elapsed = self.current_duration();
             self.state = TimerState::Done;
+            if self.should_notify() {
+                send_notification(&self.phase);
+            }
         }
     }
 
@@ -170,38 +173,83 @@ impl App{
         self.elapsed = self.current_duration();
     }
 
+    // notif settings
+    pub fn should_notify(&self) -> bool{
+        match self.notif_mode {
+            NotificationMode::Off => false,
 
+            NotificationMode::WorkOnly => {
+                self.phase == Phase::Work
+            },
+
+            NotificationMode::BreakOnly => {
+                matches!(self.phase, Phase::ShortBreak | Phase::LongBreak)
+            },
+
+            NotificationMode::All => true,
+        }
+    }
+
+    pub fn cycle_notification_mode(&mut self, delta: i32) {
+        let modes = [
+            NotificationMode::Off,
+            NotificationMode::WorkOnly,
+            NotificationMode::BreakOnly,
+            NotificationMode::All,
+        ];
+
+        let mut idx = modes
+            .iter()
+            .position(|m| *m == self.notif_mode)
+            .unwrap();
+
+        idx = (idx as i32 + delta).rem_euclid(modes.len() as i32) as usize;
+
+        self.notif_mode = modes[idx];
+    }
+    
 
     // settings functions
-     pub fn settings_up(&mut self) {
+    pub fn settings_up(&mut self) {
         if self.settings_idx > 0 {
             self.settings_idx -= 1;
         }
     }
 
     pub fn settings_down(&mut self) {
-        if self.settings_idx < 2 {
+        if self.settings_idx < 3 {
             self.settings_idx += 1;
         }
     }
 
     // Adjust the currently selected setting by `delta` minutes.
-    // We allow 1–99 minutes for any session.
+    // allow 1–99 minutes for any session.
     pub fn adjust_selected(&mut self, delta: i64) {
-        let target = match self.settings_idx {
-            0 => &mut self.work_secs,
-            1 => &mut self.short_break_secs,
-            _ => &mut self.long_break_secs,
-        };
-        let minutes = (*target as i64 / 60 + delta).clamp(1, 99);
-        *target = minutes as u64 * 60;
-
         match self.settings_idx {
-            0 if self.phase == Phase::Work => self.reset(),
-            1 if self.phase == Phase::ShortBreak => self.reset(),
-            2 if self.phase == Phase::LongBreak => self.reset(),
+            0 | 1 | 2 => {
+                let target = match self.settings_idx {
+                    0 => &mut self.work_secs,
+                    1 => &mut self.short_break_secs,
+                    _ => &mut self.long_break_secs,
+                };
+
+                let minutes = (*target as i64 / 60 + delta).clamp(1, 99);
+                *target = minutes as u64 * 60;
+
+                // reset only if current phase matches
+                match self.settings_idx {
+                    0 if self.phase == Phase::Work => self.reset(),
+                    1 if self.phase == Phase::ShortBreak => self.reset(),
+                    2 if self.phase == Phase::LongBreak => self.reset(),
+                    _ => {}
+                }
+            }
+
+            3 => {
+                self.cycle_notification_mode(delta as i32);
+            }
+
             _ => {}
         }
-    }
-
+}
 }
