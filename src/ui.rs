@@ -1,4 +1,3 @@
-
 use ratatui::{
     Frame, 
     layout::{ Alignment, Constraint, Direction, Layout, Rect }, 
@@ -12,10 +11,9 @@ use crate::app::{App, NotificationMode, Phase, Screen, TimerState};
 const FILL_CHARS: &[char] = &[
     '\u{2588}', // FULL BLOCK        ████
 ];
-const RED:    Color = Color::Rgb(123, 204, 140);
-// const RED:    Color = Color::Rgb(121, 174, 111);
-const ORANGE: Color = Color::Rgb(242, 153,  74);
-const GREEN:  Color = Color::Rgb(164, 188, 224);
+const FOCUS_COL:    Color = Color::Rgb(123, 204, 140);
+const LBREAK_COL: Color = Color::Rgb(222, 167,  130);
+const SBREAK_COL:  Color = Color::Rgb(164, 188, 224);
 const GRAY:   Color = Color::Rgb(120, 120, 130);
 // const WHITE:  Color = Color::Rgb(230, 230, 240);
 // const DIM:    Color = Color::Rgb( 80,  80,  90);
@@ -23,9 +21,9 @@ const BG:     Color = Color::Rgb( 18,  18,  24);
 
 fn phase_color(phase: &Phase) -> Color {
     match phase {
-        Phase::Work       => RED,
-        Phase::ShortBreak => GREEN,
-        Phase::LongBreak  => ORANGE,
+        Phase::Work       => FOCUS_COL,
+        Phase::ShortBreak => SBREAK_COL,
+        Phase::LongBreak  => LBREAK_COL,
     }
 }
 
@@ -84,13 +82,8 @@ pub fn progress_animation(progress: f64, tick: u64, width: u16, phase: &Phase) -
         spans.push(Span::styled(empty_chars, empty_style));
     }
 
-    
-    return spans;
-
-
-
-
-    
+ 
+    return spans;    
 }
 
 fn notification_label(mode: NotificationMode) -> &'static str {
@@ -112,8 +105,8 @@ fn render_settings(frame: &mut Frame, app: &App) {
             Constraint::Length(1), // Work duration row
             Constraint::Length(1), // Short break row
             Constraint::Length(1), // Long break row
-            Constraint::Min(0),    // spacer
             Constraint::Length(1), // Help bar
+            Constraint::Min(0),    // spacer
         ])
         .split(frame.area());
 
@@ -276,9 +269,9 @@ pub fn render_timer(f: &mut Frame, app: &App){
     f.render_widget(status_widget, chunks[4]);
 
     let (phase_label, phase_bg) = match app.phase {
-        Phase::Work       => (" ● FOCUS ",      RED),
-        Phase::ShortBreak => (" ● SHORT BREAK ", GREEN),
-        Phase::LongBreak  => (" ● LONG BREAK ",  ORANGE),
+        Phase::Work       => (" ● FOCUS ",      FOCUS_COL),
+        Phase::ShortBreak => (" ● SHORT BREAK ", SBREAK_COL),
+        Phase::LongBreak  => (" ● LONG BREAK ",  LBREAK_COL),
     };
 
     let pomodoro_dots: String = {
