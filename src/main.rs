@@ -1,6 +1,7 @@
 mod app;
 mod ui;
 mod notify;
+mod config;
 
 use std::{
     io,
@@ -17,7 +18,10 @@ use ratatui::{Terminal, backend::{ CrosstermBackend}};
 use anyhow::Result;
 use app::App;
 
-use crate::{app::{Screen, TimerState}};
+use crate::{app::{Screen, TimerState}, config::save_settings};
+use crate::config::load_settings;
+
+
 
 const TICK_RATE: Duration = Duration::from_millis(100);
 
@@ -64,8 +68,12 @@ fn handle_settings_keys(app: &mut App, key: KeyCode) -> bool {
         KeyCode::Right => app.adjust_selected(1),
         KeyCode::Char('H') => app.adjust_selected(-5),
         KeyCode::Char('L') => app.adjust_selected(5),
-        KeyCode::Char('t') | KeyCode::Enter => app.screen = Screen::Timer,
+        KeyCode::Char('t') | KeyCode::Enter =>{
+            save_settings(&app.to_settings());
+            app.screen = Screen::Timer;
+        }
         KeyCode::Char('q') => return true,
+        
         _ => {}
     }
     false
@@ -77,6 +85,9 @@ fn handle_settings_keys(app: &mut App, key: KeyCode) -> bool {
 
 fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
     let mut app = App::new();
+    if let Some(settings) = load_settings(){
+        app.apply_settings(settings);
+    }
     let mut last_tick = Instant::now();
     if app.should_notify(){
         Notification::new()
