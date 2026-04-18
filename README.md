@@ -1,6 +1,6 @@
-# Yui
+# Pomo-TUI
 
-Yui is a high-performance, aesthetically pleasing Pomodoro timer for your terminal. Built with Rust and Ratatui, it features a unique "Chaos Bar" progress indicator, persistent settings, and desktop notifications to keep you in the flow.
+Pomo-TUI is a high-performance, aesthetically pleasing Pomodoro timer for your terminal. Built with Rust and Ratatui, it features a unique "Chaos Bar" progress indicator, persistent settings, and desktop notifications to keep you in the flow.
 
 ---
 
