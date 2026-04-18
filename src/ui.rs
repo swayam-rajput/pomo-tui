@@ -155,7 +155,7 @@ fn render_settings(frame: &mut Frame, app: &App) {
     frame.render_widget(Paragraph::new(line), rows[2 + i]);
 }
     frame.render_widget(
-        Paragraph::new("  [↑↓] select  [←→] adjust  [t / enter] back to timer").style(Style::default().dim()),
+        Paragraph::new("  [↑↓] select  [←→] adjust  [w] save  [t/enter] back to timer").style(Style::default().dim()),
         rows[7],
     );
 }
