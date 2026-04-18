@@ -5,7 +5,6 @@ use crate::notify::send_notification;
 pub enum TimerState{
     Running, Paused, Done
 }
-
 #[derive(Debug, Clone, PartialEq)]
 pub enum Phase{
     Work,
@@ -24,7 +23,7 @@ pub enum Screen {
     Settings,
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Serialize,Deserialize,Clone, Copy, PartialEq)]
 pub enum NotificationMode {
     Off,
     WorkOnly,
@@ -32,7 +31,15 @@ pub enum NotificationMode {
     All,
 }
 
-
+use serde::{Serialize, Deserialize};
+#[derive(Serialize, Deserialize, PartialEq)]
+pub struct Settings {
+    pub work_secs: u64,
+    pub short_break_secs: u64,
+    pub long_break_secs: u64,
+    pub auto_advance: bool,
+    pub notif_mode: NotificationMode,
+}
 
 
 pub struct App{
@@ -262,5 +269,30 @@ impl App{
 
             _ => {}
         }
-}
+        // autosave
+        // save_settings(&self.to_settings());
+    }    
+
+    pub fn to_settings(&self) -> Settings {
+        Settings {
+            work_secs: self.work_secs,
+            short_break_secs: self.short_break_secs,
+            long_break_secs: self.long_break_secs,
+            auto_advance: self.auto_advance,
+            notif_mode: self.notif_mode,
+        }
+    }
+
+    pub fn apply_settings(&mut self, settings: Settings) {
+        self.work_secs = settings.work_secs;
+        self.short_break_secs = settings.short_break_secs;
+        self.long_break_secs = settings.long_break_secs;
+        self.auto_advance = settings.auto_advance;
+        self.notif_mode = settings.notif_mode;
+
+        // important: reset timer so UI doesn't break
+        self.reset();
+    }
+
+
 }
