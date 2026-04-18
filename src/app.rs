@@ -51,6 +51,7 @@ pub struct App{
     pub short_break_secs: u64,
     pub long_break_secs: u64,
 
+    pub auto_advance: bool,
     pub notif_mode: NotificationMode,
 }
 
@@ -73,7 +74,8 @@ impl App{
             long_break_secs:LONGBREAK_TIME.as_secs(),
             
             settings_idx:0,
-
+            
+            auto_advance:true,
             notif_mode: NotificationMode::WorkOnly,
         }
     }
@@ -140,11 +142,16 @@ impl App{
         let elapsed_now = self.elapsed + self.start.elapsed();
         if elapsed_now >= self.current_duration(){
             self.elapsed = self.current_duration();
-            self.state = TimerState::Done;
             if self.should_notify() {
                 send_notification(&self.phase);
             }
+            if self.auto_advance{
+                self.advance();
+            }else{
+                self.state = TimerState::Done;
+            }
         }
+        self.tick = self.tick.wrapping_add(1);
     }
 
 
@@ -217,7 +224,7 @@ impl App{
     }
 
     pub fn settings_down(&mut self) {
-        if self.settings_idx < 3 {
+        if self.settings_idx < 4 {
             self.settings_idx += 1;
         }
     }
@@ -247,6 +254,10 @@ impl App{
 
             3 => {
                 self.cycle_notification_mode(delta as i32);
+            }
+
+            4 => {
+                self.auto_advance = !self.auto_advance;
             }
 
             _ => {}

@@ -105,6 +105,7 @@ fn render_settings(frame: &mut Frame, app: &App) {
             Constraint::Length(1), // Work duration row
             Constraint::Length(1), // Short break row
             Constraint::Length(1), // Long break row
+            Constraint::Length(1), // Long break row
             Constraint::Length(1), // Help bar
             Constraint::Min(0),    // spacer
         ])
@@ -123,6 +124,7 @@ fn render_settings(frame: &mut Frame, app: &App) {
         ("Short Break  ", format!("{} min", app.short_break_secs / 60)),
         ("Long Break   ", format!("{} min", app.long_break_secs / 60)),
         ("Notifications", notification_label(app.notif_mode).to_string()),
+        ("Auto Start   ", if app.auto_advance { "On".to_string() } else { "Off".to_string() }),
     ];
 
     for (i, (label, value)) in items.iter().enumerate() {
@@ -153,8 +155,8 @@ fn render_settings(frame: &mut Frame, app: &App) {
     frame.render_widget(Paragraph::new(line), rows[2 + i]);
 }
     frame.render_widget(
-        Paragraph::new("  [↑↓] select  [←→] adjust  [t / enter] back to timer"),
-        rows[6],
+        Paragraph::new("  [↑↓] select  [←→] adjust  [t / enter] back to timer").style(Style::default().dim()),
+        rows[7],
     );
 }
 
