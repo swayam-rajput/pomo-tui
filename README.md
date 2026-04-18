@@ -1,61 +1,149 @@
 # Yui
 
-Yui is a high-performance, aesthetically pleasing Pomodoro timer for your terminal. Built with Rust and Ratatui, it features a unique "Chaos-Bar" progress indicator and desktop notifications to keep you in the flow.
+Yui is a high-performance, aesthetically pleasing Pomodoro timer for your terminal. Built with Rust and Ratatui, it features a unique "Chaos Bar" progress indicator, persistent settings, and desktop notifications to keep you in the flow.
+
+---
 
 ## Features
 
-- **Focus Sessions**: Optimized Pomodoro workflow with Work, Short Break, and Long Break phases.
-- **Dynamic TUI**: A beautiful, responsive terminal interface with custom RGB color palettes.
-- **Chaos Bar**: A unique progress animation that lives and breathes as you work.
-- **Live Settings**: Adjust your session lengths and notification modes on the fly without restarting.
-- **Desktop Notifications**: Integrated system notifications to keep you informed even when the terminal is hidden.
-- **Keyboard Centric**: Full control via intuitive keybindings.
+* Focus Sessions: Full Pomodoro workflow with Work, Short Break, and Long Break phases
+* Auto Advance Mode: Seamless transitions between sessions without manual input
+* Dynamic TUI: Responsive terminal UI with custom RGB color palette
+* Chaos Bar: Animated progress indicator that evolves as time passes
+* Live Settings: Adjust durations, notifications, and behavior in real-time
+* Persistent Configuration: Settings are automatically saved and restored
+* Desktop Notifications: Get notified when sessions complete
+* Keyboard Centric: Fast, intuitive keybindings
+
+---
 
 ## Keybindings
 
 ### Timer Screen
-| Key | Action |
-| :--- | :--- |
-| `Space` | Toggle Pause / Resume |
-| `Enter` | Advance to next phase (when session is done) |
-| `s` | Skip current phase |
-| `r` | Reset current timer |
-| `t` | Open Settings |
-| `q` | Quit |
+
+| Key     | Action                              |
+| :------ | :---------------------------------- |
+| `Space` | Toggle Pause / Resume               |
+| `Enter` | Advance to next phase (manual mode) |
+| `s`     | Skip current phase                  |
+| `r`     | Reset current timer                 |
+| `t`     | Open Settings                       |
+| `q`     | Quit                                |
+
+---
 
 ### Settings Screen
-| Key | Action |
-| :--- | :--- |
-| `Up` / `Down` | Navigate settings |
-| `Left` / `Right` | Adjust value (minutes) |
-| `H` / `L` | Adjust value by 5 minutes |
-| `Enter` / `t` | Save and return to Timer |
+
+| Key              | Action                    |
+| :--------------- | :------------------------ |
+| `Up` / `Down`    | Navigate settings         |
+| `Left` / `Right` | Adjust value              |
+| `H` / `L`        | Adjust value by 5 minutes |
+| `Enter` / `t`    | Save and return           |
+
+---
 
 ## Installation
 
 ### Prerequisites
-- [Rust](https://www.rust-lang.org/tools/install) (latest stable)
+
+* Rust (latest stable)
 
 ### Build from source
+
 ```bash
 git clone https://github.com/swayam-rajput/pomo-tui.git
 cd pomo-tui
 cargo build --release
 ```
 
-The binary will be available at `./target/release/rez`.
+Binary:
+
+```bash
+./target/release/rez
+```
+
+---
 
 ## Configuration
 
-You can customize the following session lengths directly in the app:
-- **Work Session**: 1-99 minutes
-- **Short Break**: 1-99 minutes
-- **Long Break**: 1-99 minutes
-- **Notification Modes**: Off, Work Only, Break Only, or All.
+Settings are managed inside the app and automatically saved to:
+
+```text
+settings.json
+```
+
+### Configurable Options
+
+* Work Duration (1–99 minutes)
+* Short Break Duration
+* Long Break Duration
+* Notification Mode:
+
+  * Off
+  * Work Only
+  * Break Only
+  * All
+* Auto Advance:
+
+  * On → transitions automatically
+  * Off → manual control
+
+---
+
+## Notifications
+
+Uses notify-rust for desktop notifications.
+
+* Works best on Linux
+* May require additional setup on Windows/macOS
+* Sound is handled separately (if enabled)
+
+---
+
+## Tech Stack
+
+* Rust
+* Ratatui (UI rendering)
+* Crossterm (terminal control and input)
+* notify-rust (notifications)
+* Serde (settings persistence)
+
+---
+
+## Project Structure
+
+```text
+src/
+├── main.rs      # app loop and input handling
+├── app.rs       # state and core logic
+├── ui.rs        # rendering
+├── notify.rs    # notifications
+├── config.rs    # settings persistence
+```
+
+---
+
+## Future Improvements
+
+* Config directory support (`~/.config/...`)
+* Custom sound selection
+* Theme system
+* Session history and analytics
+* Cross-platform notification improvements
+
+---
+
+## Demo
+
+(Add a GIF here)
+
+---
 
 ## License
 
-This project is licensed under the MIT License.
+MIT
 
 ---
+
 Built by [swayam-rajput](https://github.com/swayam-rajput)
