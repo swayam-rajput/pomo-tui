@@ -1,6 +1,6 @@
 use std::fs;
 
-use crate::app::Settings; // or define it here
+use crate::app::Settings;
 const SETTINGS_PATH:&str = "src/settings.json";
 
 pub fn save_settings(settings: &Settings) {
