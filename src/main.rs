@@ -17,7 +17,7 @@ use ratatui::{Terminal, backend::{ CrosstermBackend}};
 use anyhow::Result;
 use app::App;
 
-use crate::{app::{Screen, TimerState}, notify::send_notification};
+use crate::{app::{Screen, TimerState}};
 
 const TICK_RATE: Duration = Duration::from_millis(100);
 
