@@ -60,7 +60,7 @@ cargo build --release
 Binary:
 
 ```bash
-./target/release/rez
+./target/release/pomo-tui
 ```
 
 ---
@@ -131,12 +131,6 @@ src/
 * Theme system
 * Session history and analytics
 * Cross-platform notification improvements
-
----
-
-## Demo
-
-(Add a GIF here)
 
 ---
 
