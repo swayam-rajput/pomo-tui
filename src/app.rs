@@ -12,9 +12,9 @@ pub enum Phase{
     LongBreak,
 }
 
-pub const WORK_TIME:Duration = Duration::from_secs(25*60);
-pub const SHORTBREAK_TIME:Duration = Duration::from_secs(5*60);
-pub const LONGBREAK_TIME:Duration = Duration::from_secs(15*60);
+pub const WORK_TIME:Duration = Duration::from_secs(10);
+pub const SHORTBREAK_TIME:Duration = Duration::from_secs(10);
+pub const LONGBREAK_TIME:Duration = Duration::from_secs(10);
 
 
 #[derive(Clone, Copy, PartialEq)]
@@ -141,41 +141,56 @@ impl App{
         (secs/60,secs%60)
     }
 
-    pub fn tick(&mut self){
-        if self.state != TimerState::Running{
+    pub fn tick(&mut self) {
+        if self.state != TimerState::Running {
             return;
         }
 
         let elapsed_now = self.elapsed + self.start.elapsed();
-        if elapsed_now >= self.current_duration(){
+
+        if elapsed_now >= self.current_duration() {
             self.elapsed = self.current_duration();
+
             if self.should_notify() {
-                send_notification(&self.phase);
+                send_notification(
+                    &self.phase,
+                    &crate::notify::NotificationEvent::Ended
+                );
             }
-            if self.auto_advance{
-                self.advance();
-            }else{
+
+            if self.auto_advance {
+                self.advance(true);
+            } else {
                 self.state = TimerState::Done;
             }
         }
+
         self.tick = self.tick.wrapping_add(1);
     }
 
 
-    pub fn advance(&mut self){
-        if self.phase == Phase::Work{
-            self.pomodoros_done +=1;
+    pub fn advance(&mut self, skipped: bool) {
+        if self.phase == Phase::Work && !skipped {
+            self.pomodoros_done += 1;
         }
+
         self.phase = match self.phase {
             Phase::Work => {
                 if self.pomodoros_done % 4 == 0 {
                     Phase::LongBreak
-                }else {
+                } else {
                     Phase::ShortBreak
                 }
             }
             Phase::LongBreak | Phase::ShortBreak => Phase::Work,
         };
+
+        if self.should_notify() {
+            send_notification(
+                &self.phase,
+                &crate::notify::NotificationEvent::Started
+            );
+        }
 
         self.elapsed = Duration::ZERO;
         self.start = Instant::now();
@@ -183,8 +198,7 @@ impl App{
     }
 
     pub fn skip(&mut self) {
-        self.state = TimerState::Done;
-        self.elapsed = self.current_duration();
+        self.advance(true);
     }
 
     // notif settings

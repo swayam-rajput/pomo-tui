@@ -1,13 +1,13 @@
 use std::fs;
 use std::path::PathBuf;
 use crate::app::Settings;
-//const SETTINGS_PATH:&str = "src/settings.json";
+//const SETTINGS_PATH:&str = "src/pomo-tui-qsettings.json";
 
 pub fn config_path() -> PathBuf {
     let mut path = std::env::current_exe().expect("failed to get exe path");
 
     path.pop();
-    path.push("settings.json");
+    path.push("pomo-tui-settings.json");
     path
 }
 pub fn save_settings(settings: &Settings) {
