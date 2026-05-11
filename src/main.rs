@@ -13,7 +13,7 @@ use crossterm::{
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
-use notify_rust::Notification;
+// use notify_rust::Notification;
 use ratatui::{Terminal, backend::{ CrosstermBackend}};
 use anyhow::Result;
 use app::App;
@@ -53,7 +53,7 @@ fn handle_timer_keys(app: &mut App, key: KeyCode) -> bool {
         KeyCode::Char('t') => app.screen = Screen::Settings,
         KeyCode::Enter => {
             if app.state == TimerState::Done {
-                app.advance();
+                app.advance(false);
             }
         }
         _ => {}
@@ -89,13 +89,6 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> 
         app.apply_settings(settings);
     }
     let mut last_tick = Instant::now();
-    if app.should_notify(){
-        Notification::new()
-        .summary("focus session started")
-        .body("your timer is ready").timeout(Duration::from_millis(1000))
-        .show()
-        .ok();
-    }
     loop{
         terminal.draw(|f| ui::render(f, &app))?;
         if event::poll(Duration::from_millis(50))? {
