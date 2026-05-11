@@ -1,15 +1,26 @@
 use std::fs;
-
+use std::path::PathBuf;
 use crate::app::Settings;
-const SETTINGS_PATH:&str = "src/settings.json";
+//const SETTINGS_PATH:&str = "src/settings.json";
 
+pub fn config_path() -> PathBuf {
+    let mut path = std::env::current_exe().expect("failed to get exe path");
+
+    path.pop();
+    path.push("settings.json");
+    path
+}
 pub fn save_settings(settings: &Settings) {
+    let path = config_path();
+
     if let Ok(json) = serde_json::to_string_pretty(settings) {
-        let _ = fs::write(SETTINGS_PATH, json);
+        let _ = fs::write(path, json);
     }
 }
 
 pub fn load_settings() -> Option<Settings> {
-    let data = fs::read_to_string(SETTINGS_PATH).ok()?;
+    let path = config_path();
+
+    let data = fs::read_to_string(path).ok()?;
     serde_json::from_str(&data).ok()
 }
