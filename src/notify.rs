@@ -1,12 +1,36 @@
 use notify_rust::Notification;
 
 use crate::app::Phase;
-
-pub fn send_notification(phase: &Phase) {
-    let (title, body) = match phase {
-        Phase::Work => ("focus session complete", "take a break."),
-        Phase::ShortBreak => ("short break over", "back to work."),
-        Phase::LongBreak => ("long break over", "ready to focus again."),
+pub enum NotificationEvent{
+    Started,
+    Ended
+}
+pub fn send_notification(phase: &Phase, event: &NotificationEvent) {
+    let (title, body) = match (phase, event) {
+        (Phase::Work,NotificationEvent::Started) => (
+            "focus session started", 
+            "time to focus, lock in"
+        ),
+        (Phase::Work, NotificationEvent::Ended) => (
+            "focus session complete",
+            "take a break."
+        ),
+        (Phase::ShortBreak,NotificationEvent::Started) => (
+            "short break started", 
+            "step away for a bit"
+        ),
+        (Phase::ShortBreak, NotificationEvent::Ended) => (
+            "short break over",
+            "back to work"
+        ),
+        (Phase::LongBreak,NotificationEvent::Started) => (
+            "long break started", 
+            "get up, stretch out, hydrate"
+        ),
+        (Phase::LongBreak,NotificationEvent::Ended) => (
+            "long break over", 
+            "get back workin"
+        ),
     };
 
     print!("\x07"); // ASCII bell
